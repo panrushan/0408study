@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JavaScript基础练习</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .section {
+            background: white;
+            padding: 20px;
+            margin: 15px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h2 {
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+        .output {
+            background-color: #f8f9fa;
+            border-left: 4px solid #3498db;
+            padding: 10px;
+            margin: 10px 0;
+            font-family: 'Courier New', monospace;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+    </style>
+</head>
+<body>
+    <h1>JavaScript基础知识练习</h1>
+
+    <div class="section">
+        <h2>1. 变量的定义</h2>
+        <button onclick="demoVariables()">运行变量演示</button>
+        <div id="variables-output" class="output"></div>
+    </div>
+
+    <div class="section">
+        <h2>2. 变量类型</h2>
+        <button onclick="demoTypes()">运行类型演示</button>
+        <div id="types-output" class="output"></div>
+    </div>
+
+    <div class="section">
+        <h2>3. 表达式与运算符</h2>
+        <button onclick="demoExpressions()">运行表达式演示</button>
+        <div id="expressions-output" class="output"></div>
+    </div>
+
+    <div class="section">
+        <h2>4. 流程控制</h2>
+        <button onclick="demoControlFlow()">运行流程控制演示</button>
+        <div id="control-output" class="output"></div>
+    </div>
+
+    <div class="section">
+        <h2>5. 函数定义与调用</h2>
+        <button onclick="demoFunctions()">运行函数演示</button>
+        <div id="functions-output" class="output"></div>
+    </div>
+
+    <script>
+        function printOutput(elementId, text) {
+            document.getElementById(elementId).innerHTML += text + '<br>';
+        }
+
+        function clearOutput(elementId) {
+            document.getElementById(elementId).innerHTML = '';
+        }
+
+        function demoVariables() {
+            clearOutput('variables-output');
+            
+            printOutput('variables-output', '=== var, let, const 的区别 ===');
+            
+            var a = 10;
+            var a = 20;
+            printOutput('variables-output', 'var可以重复声明: a = ' + a);
+            
+            let b = 30;
+            printOutput('variables-output', 'let不能重复声明，但可以修改: b = ' + b);
+            b = 40;
+            printOutput('variables-output', '修改后: b = ' + b);
+            
+            const c = 50;
+            printOutput('variables-output', 'const不能修改: c = ' + c);
+            
+            printOutput('variables-output', '<br>=== 变量提升演示 ===');
+            printOutput('variables-output', 'var声明的变量会提升: x = ' + x);
+            var x = 100;
+        }
+
+        function demoTypes() {
+            clearOutput('types-output');
+            
+            printOutput('types-output', '=== JavaScript数据类型 ===');
+            
+            const num = 42;
+            const floatNum = 3.14;
+            printOutput('types-output', 'Number类型: ' + num + ', ' + floatNum + ' -> 类型: ' + typeof num);
+            
+            const str = 'Hello, JavaScript!';
+            printOutput('types-output', 'String类型: ' + str + ' -> 类型: ' + typeof str);
+            
+            const isTrue = true;
+            printOutput('types-output', 'Boolean类型: ' + isTrue + ' -> 类型: ' + typeof isTrue);
+            
+            const undef = undefined;
+            printOutput('types-output', 'Undefined类型: ' + undef + ' -> 类型: ' + typeof undef);
+            
+            const nullValue = null;
+            printOutput('types-output', 'Null类型: ' + nullValue + ' -> 类型: ' + typeof nullValue);
+            
+            const person = {name: '张三', age: 20};
+            printOutput('types-output', 'Object类型: ' + JSON.stringify(person) + ' -> 类型: ' + typeof person);
+            
+            const fruits = ['苹果', '香蕉', '橘子'];
+            printOutput('types-output', 'Array类型: ' + fruits + ' -> 类型: ' + typeof fruits);
+            
+            const sym = Symbol('id');
+            printOutput('types-output', 'Symbol类型: ' + sym.toString() + ' -> 类型: ' + typeof sym);
+        }
+
+        function demoExpressions() {
+            clearOutput('expressions-output');
+            
+            printOutput('expressions-output', '=== 算术运算符 ===');
+            let a = 10, b = 3;
+            printOutput('expressions-output', a + ' + ' + b + ' = ' + (a + b));
+            printOutput('expressions-output', a + ' - ' + b + ' = ' + (a - b));
+            printOutput('expressions-output', a + ' * ' + b + ' = ' + (a * b));
+            printOutput('expressions-output', a + ' / ' + b + ' = ' + (a / b));
+            printOutput('expressions-output', a + ' % ' + b + ' = ' + (a % b));
+            printOutput('expressions-output', a + ' ** ' + b + ' = ' + (a ** b));
+            
+            printOutput('expressions-output', '<br>=== 比较运算符 ===');
+            printOutput('expressions-output', '5 == "5": ' + (5 == "5"));
+            printOutput('expressions-output', '5 === "5": ' + (5 === "5"));
+            printOutput('expressions-output', '5 != "5": ' + (5 != "5"));
+            printOutput('expressions-output', '5 !== "5": ' + (5 !== "5"));
+            
+            printOutput('expressions-output', '<br>=== 逻辑运算符 ===');
+            printOutput('expressions-output', 'true && false: ' + (true && false));
+            printOutput('expressions-output', 'true || false: ' + (true || false));
+            printOutput('expressions-output', '!true: ' + (!true));
+            
+            printOutput('expressions-output', '<br>=== 三元运算符 ===');
+            let score = 85;
+            let result = score >= 60 ? '及格' : '不及格';
+            printOutput('expressions-output', '分数' + score + ': ' + result);
+        }
+
+        function demoControlFlow() {
+            clearOutput('control-output');
+            
+            printOutput('control-output', '=== if条件语句 ===');
+            let temperature = 28;
+            if (temperature >= 30) {
+                printOutput('control-output', '温度' + temperature + '度: 天气炎热');
+            } else if (temperature >= 20) {
+                printOutput('control-output', '温度' + temperature + '度: 天气舒适');
+            } else {
+                printOutput('control-output', '温度' + temperature + '度: 天气寒冷');
+            }
+            
+            printOutput('control-output', '<br>=== switch语句 ===');
+            let day = 3;
+            switch(day) {
+                case 1:
+                    printOutput('control-output', '星期' + day + ': 星期一');
+                    break;
+                case 2:
+                    printOutput('control-output', '星期' + day + ': 星期二');
+                    break;
+                case 3:
+                    printOutput('control-output', '星期' + day + ': 星期三');
+                    break;
+                default:
+                    printOutput('control-output', '其他日期');
+            }
+            
+            printOutput('control-output', '<br>=== for循环 ===');
+            let sum = 0;
+            for (let i = 1; i <= 5; i++) {
+                sum += i;
+                printOutput('control-output', 'i = ' + i + ', 累加和 = ' + sum);
+            }
+            
+            printOutput('control-output', '<br>=== while循环 ===');
+            let count = 1;
+            while (count <= 3) {
+                printOutput('control-output', '第' + count + '次循环');
+                count++;
+            }
+            
+            printOutput('control-output', '<br>=== for...in遍历对象 ===');
+            let student = {name: '李四', age: 21, major: '计算机'};
+            for (let key in student) {
+                printOutput('control-output', key + ': ' + student[key]);
+            }
+        }
+
+        function demoFunctions() {
+            clearOutput('functions-output');
+            
+            printOutput('functions-output', '=== 函数声明 ===');
+            function add(a, b) {
+                return a + b;
+            }
+            printOutput('functions-output', 'add(5, 3) = ' + add(5, 3));
+            
+            printOutput('functions-output', '<br>=== 函数表达式 ===');
+            const multiply = function(a, b) {
+                return a * b;
+            };
+            printOutput('functions-output', 'multiply(4, 6) = ' + multiply(4, 6));
+            
+            printOutput('functions-output', '<br>=== 箭头函数 ===');
+            const square = (x) => x * x;
+            printOutput('functions-output', 'square(9) = ' + square(9));
+            
+            printOutput('functions-output', '<br>=== 带默认参数的函数 ===');
+            function greet(name = '访客') {
+                return '你好, ' + name + '!';
+            }
+            printOutput('functions-output', greet());
+            printOutput('functions-output', greet('王五'));
+            
+            printOutput('functions-output', '<br>=== 递归函数 ===');
+            function factorial(n) {
+                if (n <= 1) return 1;
+                return n * factorial(n - 1);
+            }
+            printOutput('functions-output', '5的阶乘 = ' + factorial(5));
+            
+            printOutput('functions-output', '<br>=== 闭包演示 ===');
+            function createCounter() {
+                let count = 0;
+                return function() {
+                    return ++count;
+                };
+            }
+            const counter = createCounter();
+            printOutput('functions-output', '计数器第1次: ' + counter());
+            printOutput('functions-output', '计数器第2次: ' + counter());
+            printOutput('functions-output', '计数器第3次: ' + counter());
+        }
+    </script>
+</body>
+</html>
