@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>安肌成分检测 - 敏感肌护肤助手</title>
+  <link rel="stylesheet" href="css/style.css">
+  <!-- 百度OCR通过Node.js代理调用，无需前端OCR库 -->
+</head>
+<body>
+
+  <!-- ==================== 分析页（首页） ==================== -->
+  <div class="page active" id="page-analyze">
+    <div class="header">
+      <div class="logo-icon">🌿</div>
+      <h1>安肌成分检测</h1>
+      <p>守护敏感肌，科学避雷</p>
+      <div style="display:inline-block; background:#e8f5e9; color:#43a047; padding:4px 12px; border-radius:20px; font-size:12px; margin-top:8px; font-weight:600;">
+        🆕 百度OCR版 v3
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">📝 粘贴成分表</div>
+      <textarea class="textarea" id="ingredient-input" placeholder="请将化妆品成分表粘贴到这里...
+
+示例格式：
+水、甘油、丁二醇、乙醇、香精、苯氧乙醇、透明质酸"></textarea>
+      <button class="btn btn-primary" style="margin-top:14px" onclick="analyzeText()">
+        🔍 开始分析成分
+      </button>
+    </div>
+
+    <div style="text-align:center; color:var(--text-secondary); font-size:13px; margin:10px 0;">— 或 —</div>
+
+    <div class="card">
+      <div class="card-title">📷 拍照/上传成分表</div>
+
+      <!-- 上传区 -->
+      <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()">
+        <div class="icon">📸</div>
+        <p>点击上传图片，自动识别成分</p>
+        <p style="font-size:12px; margin-top:6px; opacity:0.6">支持 JPG、PNG 格式</p>
+        <input type="file" id="file-input" accept="image/*" onchange="handleImageUpload(event)">
+      </div>
+
+      <!-- 裁剪区域 -->
+      <div id="crop-container" class="crop-container hidden">
+        <p style="font-size:13px; color:var(--text-secondary); margin-bottom:10px;">
+          👆 拖动方框选中<strong>成分表</strong>区域，识别会更精准
+        </p>
+        <div class="crop-wrapper" id="crop-wrapper">
+          <canvas id="crop-canvas" class="crop-canvas"></canvas>
+          <div class="crop-overlay" id="crop-overlay"></div>
+          <div class="crop-box" id="crop-box">
+            <div class="crop-handle nw"></div>
+            <div class="crop-handle ne"></div>
+            <div class="crop-handle sw"></div>
+            <div class="crop-handle se"></div>
+          </div>
+        </div>
+        <div class="crop-btn-group">
+          <button class="btn btn-sm btn-secondary" onclick="resetCrop()">🔄 重置</button>
+          <button class="btn btn-sm btn-outline" onclick="cancelCrop()">取消</button>
+          <button class="btn btn-sm btn-primary" onclick="confirmCrop()">✂️ 确认裁剪并识别</button>
+        </div>
+      </div>
+
+      <!-- OCR加载状态 -->
+      <div id="ocr-loading" class="loading hidden">
+        <div class="spinner"></div>
+        <p id="ocr-status">正在下载识别引擎...</p>
+        <p style="font-size:12px; opacity:0.6; margin-top:6px;">首次使用需要下载约10MB语言包，请耐心等待</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 分析报告页 ==================== -->
+  <div class="page" id="page-result">
+    <div class="header">
+      <div class="logo-icon">📊</div>
+      <h1>成分分析报告</h1>
+      <p id="result-product-name">未命名产品</p>
+    </div>
+
+    <!-- 评分区 -->
+    <div class="card" style="text-align:center;">
+      <div class="score-circle" id="score-circle">
+        <span class="score-num" id="score-num">--</span>
+        <span class="score-label" id="score-label">安全评分</span>
+      </div>
+      <div id="score-comment" style="font-size:15px; font-weight:600; color:var(--primary-dark);"></div>
+      <div id="score-detail" style="font-size:13px; color:var(--text-secondary); margin-top:6px;"></div>
+    </div>
+
+    <!-- 统计条 -->
+    <div class="card">
+      <div class="card-title">📈 成分风险统计</div>
+      <div class="stat-bar">
+        <span class="stat-label">🟢 安全</span>
+        <div class="stat-track"><div class="stat-fill" style="background:var(--safe); width:0%" id="stat-safe"></div></div>
+        <span class="stat-count" id="count-safe">0</span>
+      </div>
+      <div class="stat-bar">
+        <span class="stat-label">🟡 低敏</span>
+        <div class="stat-track"><div class="stat-fill" style="background:#9ccc65; width:0%" id="stat-low"></div></div>
+        <span class="stat-count" id="count-low">0</span>
+      </div>
+      <div class="stat-bar">
+        <span class="stat-label">🟠 中风险</span>
+        <div class="stat-track"><div class="stat-fill" style="background:var(--warning); width:0%" id="stat-medium"></div></div>
+        <span class="stat-count" id="count-medium">0</span>
+      </div>
+      <div class="stat-bar">
+        <span class="stat-label">🔴 高风险</span>
+        <div class="stat-track"><div class="stat-fill" style="background:var(--danger); width:0%" id="stat-high"></div></div>
+        <span class="stat-count" id="count-high">0</span>
+      </div>
+      <div class="stat-bar">
+        <span class="stat-label">⛔ 禁用</span>
+        <div class="stat-track"><div class="stat-fill" style="background:#c62828; width:0%" id="stat-banned"></div></div>
+        <span class="stat-count" id="count-banned">0</span>
+      </div>
+    </div>
+
+    <!-- 致痘/致敏成分汇总 -->
+    <div id="risk-summary"></div>
+
+    <!-- 个性化风险提醒 -->
+    <div id="personal-alert"></div>
+
+    <!-- 成分冲突/协同提示 -->
+    <div id="conflict-alert"></div>
+
+    <!-- 按功效分类展示 -->
+    <div id="category-sections"></div>
+
+    <!-- 成分详情列表 -->
+    <div class="card">
+      <div class="card-title">🔬 成分详细分析</div>
+      <div class="ingredient-list" id="ingredient-list"></div>
+    </div>
+
+    <!-- 保存按钮 -->
+    <button class="btn btn-primary" onclick="saveToHistory()">💾 保存到历史记录</button>
+    <button class="btn btn-outline" style="margin-top:10px;" onclick="goPage('analyze')">← 重新分析</button>
+  </div>
+
+  <!-- ==================== 成分百科弹窗 ==================== -->
+  <div class="modal-overlay hidden" id="wiki-modal" onclick="closeWiki(event)">
+    <div class="modal-card" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 id="wiki-title">成分详情</h3>
+        <button class="modal-close" onclick="closeWiki()">✕</button>
+      </div>
+      <div class="modal-body" id="wiki-body"></div>
+    </div>
+  </div>
+
+  <!-- ==================== 肤质档案页 ==================== -->
+  <div class="page" id="page-profile">
+    <div class="header">
+      <div class="logo-icon">👤</div>
+      <h1>我的肤质档案</h1>
+      <p>完善档案，获取更精准的安全评分</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🏷️ 你的肤质类型（可多选）</div>
+      <div class="tag-list" id="skin-types">
+        <span class="tag" data-value="dry">干性</span>
+        <span class="tag" data-value="oily">油性</span>
+        <span class="tag" data-value="combination">混合性</span>
+        <span class="tag" data-value="sensitive">敏感肌</span>
+        <span class="tag" data-value="acne">痘痘肌</span>
+        <span class="tag" data-value="normal">中性</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">⚠️ 已知过敏/不耐受成分</div>
+      <p style="font-size:13px; color:var(--text-secondary); margin-bottom:10px;">点击添加你用过会过敏的成分，分析时会特别标红警告</p>
+      <div class="tag-list" id="allergy-list">
+        <span class="tag" data-value="alcohol">酒精</span>
+        <span class="tag" data-value="fragrance">香精</span>
+        <span class="tag" data-value="parabens">Parabens</span>
+        <span class="tag" data-value="mit">MIT/MCI</span>
+        <span class="tag" data-value="salicylic acid">水杨酸</span>
+        <span class="tag" data-value="glycolic acid">果酸</span>
+        <span class="tag" data-value="retinol">A醇</span>
+        <span class="tag" data-value="essential oil">精油</span>
+        <span class="tag" data-value="lanolin">羊毛脂</span>
+        <span class="tag" data-value="coconut oil">椰子油</span>
+      </div>
+      <div style="margin-top:14px; display:flex; gap:8px;">
+        <input class="input" id="custom-allergy" placeholder="输入其他过敏成分..." style="flex:1;">
+        <button class="btn btn-secondary btn-sm" onclick="addCustomAllergy()">添加</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🤰 特殊状况</div>
+      <div class="tag-list" id="special-status">
+        <span class="tag" data-value="pregnant">孕期/备孕</span>
+        <span class="tag" data-value="nursing">哺乳期</span>
+        <span class="tag" data-value="rosacea">玫瑰痤疮</span>
+        <span class="tag" data-value="eczema">湿疹/皮炎</span>
+      </div>
+    </div>
+
+    <button class="btn btn-primary" onclick="saveProfile()">💾 保存档案</button>
+    <div id="profile-saved" style="text-align:center; color:var(--primary); font-size:13px; margin-top:10px; display:none;">
+      ✅ 档案已保存，分析时将自动应用
+    </div>
+  </div>
+
+  <!-- ==================== 历史记录页 ==================== -->
+  <div class="page" id="page-history">
+    <div class="header">
+      <div class="logo-icon">📜</div>
+      <h1>检测历史</h1>
+      <p>回顾你分析过的产品</p>
+    </div>
+
+    <div id="history-list"></div>
+
+    <div class="empty-state" id="history-empty">
+      <div class="empty-icon">📭</div>
+      <p>还没有检测记录</p>
+      <p style="font-size:13px; margin-top:6px;">去首页分析第一款产品吧~</p>
+    </div>
+
+    <button class="btn btn-outline hidden" id="clear-history" style="margin-top:10px;" onclick="clearHistory()">
+      🗑️ 清空历史记录
+    </button>
+  </div>
+
+  <!-- ==================== 底部导航 ==================== -->
+  <nav class="bottom-nav">
+    <button class="nav-item active" onclick="goPage('analyze')" data-page="analyze">
+      <span class="nav-icon">🔍</span>
+      <span>检测</span>
+    </button>
+    <button class="nav-item" onclick="goPage('profile')" data-page="profile">
+      <span class="nav-icon">👤</span>
+      <span>档案</span>
+    </button>
+    <button class="nav-item" onclick="goPage('history')" data-page="history">
+      <span class="nav-icon">📜</span>
+      <span>历史</span>
+    </button>
+  </nav>
+
+  <!-- 数据与逻辑（改名防止缓存） -->
+  <script src="data/ingredients-v3.js"></script>
+  <script src="js/app-v3.js"></script>
+</body>
+</html>
