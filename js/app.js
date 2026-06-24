@@ -7,17 +7,78 @@ let currentResult = null;
 let profile = loadProfile();
 let historyData = loadHistory();
 
-// ========== 页面切换 ==========
+// ========== 页面切换（带离场过渡） ==========
 function goPage(pageName) {
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const current = document.querySelector('.page.active');
   const target = document.getElementById('page-' + pageName);
-  if (target) target.classList.add('active');
+  if (!target || current === target) return;
+
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   const navBtn = document.querySelector(`.nav-item[data-page="${pageName}"]`);
   if (navBtn) navBtn.classList.add('active');
-  if (pageName === 'history') renderHistory();
-  if (pageName === 'profile') renderProfile();
-  window.scrollTo(0, 0);
+
+  const switchOver = () => {
+    document.querySelectorAll('.page').forEach(p => {
+      p.classList.remove('active', 'leaving');
+    });
+    target.classList.add('active');
+    if (pageName === 'history') renderHistory();
+    if (pageName === 'profile') renderProfile();
+    if (pageName === 'result' && window.SkincareTilt) {
+      // 重新观察动态渲染的卡片
+      setTimeout(() => window.SkincareTilt.initReveal(), 50);
+    }
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  };
+
+  if (current) {
+    current.classList.add('leaving');
+    current.addEventListener('animationend', switchOver, { once: true });
+    // 兜底：万一 animationend 没触发
+    setTimeout(switchOver, 260);
+  } else {
+    switchOver();
+  }
+}
+
+// ========== Toast 提示 ==========
+function showToast(msg, type = '') {
+  const existing = document.querySelector('.toast');
+  if (existing) existing.remove();
+  const toast = document.createElement('div');
+  toast.className = 'toast ' + (type ? 'toast-' + type : '');
+  const icon = type === 'success' ? '✓ ' : type === 'warn' ? '⚠ ' : type === 'error' ? '✕ ' : '';
+  toast.innerHTML = `<span>${icon}</span><span>${msg}</span>`;
+  document.body.appendChild(toast);
+  requestAnimationFrame(() => toast.classList.add('show'));
+  setTimeout(() => {
+    toast.classList.remove('show');
+    setTimeout(() => toast.remove(), 400);
+  }, 2600);
+}
+
+// ========== 底部确认条（替代 confirm） ==========
+function showConfirmSheet(title, desc, onConfirm) {
+  const existing = document.querySelector('.confirm-sheet');
+  if (existing) existing.remove();
+  const sheet = document.createElement('div');
+  sheet.className = 'confirm-sheet';
+  sheet.innerHTML = `
+    <div class="confirm-sheet-title">${title}</div>
+    <div class="confirm-sheet-desc">${desc}</div>
+    <div class="confirm-sheet-actions">
+      <button class="btn btn-outline">取消</button>
+      <button class="btn btn-primary">确认</button>
+    </div>`;
+  document.body.appendChild(sheet);
+  requestAnimationFrame(() => sheet.classList.add('show'));
+  const [cancelBtn, okBtn] = sheet.querySelectorAll('button');
+  const close = () => {
+    sheet.classList.remove('show');
+    setTimeout(() => sheet.remove(), 360);
+  };
+  cancelBtn.onclick = close;
+  okBtn.onclick = () => { close(); onConfirm && onConfirm(); };
 }
 
 // ========== OCR 后处理：只提取成分 ==========
@@ -258,8 +319,27 @@ function getScoreComment(score) {
 // ========== 分析主流程 ==========
 function analyzeText() {
   const input = document.getElementById('ingredient-input').value;
-  if (!input.trim()) { alert('请先输入成分表'); return; }
-  runAnalysis(input);
+  if (!input.trim()) { showToast('请先输入成分表', 'warn'); return; }
+
+  const btn = document.getElementById('analyze-btn');
+  setButtonLoading(btn, true);
+
+  // 模拟短暂加载，增强交互感
+  setTimeout(() => {
+    runAnalysis(input);
+    setButtonLoading(btn, false);
+  }, 400);
+}
+
+function setButtonLoading(btn, loading) {
+  if (!btn) return;
+  if (loading) {
+    btn.classList.add('loading');
+    btn.dataset.originalText = btn.innerHTML;
+  } else {
+    btn.classList.remove('loading');
+    if (btn.dataset.originalText) btn.innerHTML = btn.dataset.originalText;
+  }
 }
 
 function runAnalysis(text, source = 'text') {
@@ -274,27 +354,82 @@ function runAnalysis(text, source = 'text') {
   };
   renderResult(currentResult);
   goPage('result');
+
+  // 安全分数高时撒花庆祝
+  if (currentResult.score >= 80) {
+    setTimeout(() => {
+      fireConfetti();
+      showCelebrateBadge(currentResult.score >= 90 ? '成分很温和 🌿' : '整体较安全 ✨');
+    }, 1400);
+  }
 }
 
 // ========== 渲染报告 ==========
 function renderResult(result) {
   const circle = document.getElementById('score-circle');
-  circle.className = 'score-circle ' + result.comment.class;
-  circle.style.setProperty('--score-deg', (result.score / 100 * 360) + 'deg');
-  document.getElementById('score-num').textContent = result.score;
-  document.getElementById('score-comment').textContent = result.comment.text;
-  document.getElementById('score-detail').textContent = result.comment.detail;
+  const scoreNumEl = document.getElementById('score-num');
+  const scoreCommentEl = document.getElementById('score-comment');
+  const scoreDetailEl = document.getElementById('score-detail');
 
-  const total = result.ingredients.length || 1;
-  const setStat = (id, count) => {
-    document.getElementById('stat-' + id).style.width = (count / total * 100) + '%';
-    document.getElementById('count-' + id).textContent = count;
+  // 重置：先归零，再做动画
+  circle.className = 'score-circle ' + result.comment.class;
+  circle.style.setProperty('--score-deg', '0deg');
+  scoreNumEl.textContent = '0';
+  scoreCommentEl.textContent = '';
+  scoreDetailEl.textContent = '';
+
+  // 评分数字 + 圆环弧度 同步缓动
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const duration = reduced ? 0 : 1200;
+  const startT = performance.now();
+  const target = result.score;
+  const easeOutCubic = t => 1 - Math.pow(1 - t, 3);
+
+  const animateScore = (now) => {
+    const elapsed = now - startT;
+    const t = duration === 0 ? 1 : Math.min(elapsed / duration, 1);
+    const eased = easeOutCubic(t);
+    const val = Math.round(target * eased);
+    scoreNumEl.textContent = val;
+    circle.style.setProperty('--score-deg', (val / 100 * 360) + 'deg');
+    if (t < 1) {
+      requestAnimationFrame(animateScore);
+    } else {
+      scoreNumEl.textContent = target;
+      circle.style.setProperty('--score-deg', (target / 100 * 360) + 'deg');
+      scoreCommentEl.textContent = result.comment.text;
+      scoreDetailEl.textContent = result.comment.detail;
+    }
   };
-  setStat('safe', result.riskCount.safe);
-  setStat('low', result.riskCount.low);
-  setStat('medium', result.riskCount.medium);
-  setStat('high', result.riskCount.high);
-  setStat('banned', result.riskCount.banned);
+  requestAnimationFrame(animateScore);
+
+  // 统计条：stagger 生长 + 数字滚动
+  const total = result.ingredients.length || 1;
+  const setStat = (id, count, delay) => {
+    const fill = document.getElementById('stat-' + id);
+    const countEl = document.getElementById('count-' + id);
+    fill.style.width = '0%';
+    countEl.textContent = '0';
+    const targetW = (count / total * 100);
+    const numDuration = 700;
+    const numStart = performance.now() + delay;
+    const numAnim = (now) => {
+      const t = Math.min(Math.max((now - numStart) / numDuration, 0), 1);
+      const eased = easeOutCubic(t);
+      countEl.textContent = Math.round(count * eased);
+      if (t < 1) requestAnimationFrame(numAnim);
+      else countEl.textContent = count;
+    };
+    setTimeout(() => {
+      fill.style.width = targetW + '%';
+      requestAnimationFrame(numAnim);
+    }, delay);
+  };
+  setStat('safe', result.riskCount.safe, 120);
+  setStat('low', result.riskCount.low, 200);
+  setStat('medium', result.riskCount.medium, 280);
+  setStat('high', result.riskCount.high, 360);
+  setStat('banned', result.riskCount.banned, 440);
 
   const riskSummaryEl = document.getElementById('risk-summary');
   const risky = result.ingredients.filter(i => (i.adjustedLevel || i.level) >= 3);
@@ -362,8 +497,17 @@ function renderResult(result) {
     const badgeClass = lvl >= 5 ? 'badge-banned' : lvl === 4 ? 'badge-high' : lvl === 3 ? 'badge-medium' : lvl === 2 ? 'badge-low' : 'badge-safe';
     const badgeText = lvl >= 5 ? '禁用' : lvl === 4 ? '高风险' : lvl === 3 ? '中风险' : lvl === 2 ? '低敏' : '安全';
     const wikiKey = ing.key || ing.name;
-    return `<div class="ingredient-item ${levelClass}"><div class="ing-dot"></div><div class="ing-info"><div class="ing-name" onclick="openWiki('${escapeHtml(wikiKey)}')">${escapeHtml(ing.name)}<span class="ing-badge ${badgeClass}">${badgeText}</span></div><div class="ing-meta">${ing.type}${ing.matched ? '' : ' · 未收录'}</div><div class="ing-reason">${escapeHtml(ing.reason)}</div></div></div>`;
+    const filterLevel = lvl >= 5 ? 'banned' : lvl === 4 ? 'danger' : lvl === 3 ? 'warning' : 'safe';
+    return `<div class="ingredient-item ${levelClass}" data-level="${filterLevel}" onclick="openWiki('${escapeHtml(wikiKey)}')"><div class="ing-dot"></div><div class="ing-info"><div class="ing-name">${escapeHtml(ing.name)}<span class="ing-badge ${badgeClass}">${badgeText}</span></div><div class="ing-meta">${ing.type}${ing.matched ? '' : ' · 未收录'}</div><div class="ing-reason">${escapeHtml(ing.reason)}</div></div></div>`;
   }).join('');
+
+  // 成分项 stagger 入场
+  const items = listEl.querySelectorAll('.ingredient-item');
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  items.forEach((el, i) => {
+    if (reducedMotion) { el.classList.add('revealed'); return; }
+    setTimeout(() => el.classList.add('revealed'), 120 + i * 55);
+  });
 }
 
 function escapeHtml(str) {
@@ -764,22 +908,22 @@ async function confirmCrop() {
     document.getElementById('crop-container').classList.add('hidden');
     document.getElementById('upload-zone').classList.remove('hidden');
 
-    // 临时调试：显示识别到的原始文本，帮助定位问题
-    alert(`【调试】识别到的原始文本（前200字）：\n${(translated || rawText).substring(0, 200)}\n\n如果这里显示正确但输入框错误，请截图告诉我`);
+    // 调试信息走 console，不打扰用户
+    console.log('[OCR调试] 原始文本前200字:', (translated || rawText).substring(0, 200));
 
     if (!extracted || extracted.length < 5) {
       document.getElementById('ingredient-input').value = translated || rawText;
-      alert('未能有效提取成分，已填入原始识别文本，请手动清理后分析');
+      showToast('未能有效提取成分，已填入原始文本，请手动清理', 'warn');
     } else {
       document.getElementById('ingredient-input').value = extracted;
-      alert(`识别完成！已提取 ${extracted.split('、').length} 个成分，请点击「开始分析」`);
+      showToast(`识别完成！已提取 ${extracted.split('、').length} 个成分`, 'success');
     }
     goPage('analyze');
     document.getElementById('file-input').value = '';
   } catch (err) {
     loading.classList.add('hidden');
     console.error(err);
-    alert('图片识别失败：' + (err.message || '未知错误') + '\n建议手动输入成分表');
+    showToast('图片识别失败，建议手动输入', 'error');
   }
 }
 
@@ -880,7 +1024,9 @@ function saveToHistory() {
   historyData.unshift(currentResult);
   if (historyData.length > 50) historyData = historyData.slice(0, 50);
   localStorage.setItem('skincare_history', JSON.stringify(historyData));
-  alert('已保存到历史记录！');
+  showToast('已保存到历史记录', 'success');
+  fireConfetti(15);
+  showCelebrateBadge('保存成功 📚');
 }
 
 function loadHistory() {
@@ -901,14 +1047,13 @@ function renderHistory() {
   emptyEl.classList.add('hidden');
   clearBtn.classList.remove('hidden');
   listEl.innerHTML = historyData.map(item => {
-    const scoreBg = item.score >= 75 ? '#e8f5e9' : item.score >= 60 ? '#fff3e0' : '#ffebee';
-    const scoreColor = item.score >= 75 ? '#43a047' : item.score >= 60 ? '#ef6c00' : '#c62828';
+    const scoreClass = item.score >= 75 ? 'score-excellent' : item.score >= 60 ? 'score-warning' : 'score-danger';
     const riskTags = [];
     if (item.riskCount.banned > 0) riskTags.push(`⛔ ${item.riskCount.banned}`);
     if (item.riskCount.high > 0) riskTags.push(`🔴 ${item.riskCount.high}`);
     if (item.riskCount.medium > 0) riskTags.push(`🟠 ${item.riskCount.medium}`);
     return `<div class="history-item" onclick="viewHistoryItem(${item.id})">
-      <div class="history-score" style="background:${scoreBg}; color:${scoreColor};">${item.score}</div>
+      <div class="history-score ${scoreClass}">${item.score}</div>
       <div class="history-info">
         <div class="history-name">${escapeHtml(item.productName)}</div>
         <div class="history-date">${item.date}</div>
@@ -927,13 +1072,286 @@ function viewHistoryItem(id) {
 }
 
 function clearHistory() {
-  if (!confirm('确定要清空所有历史记录吗？')) return;
-  historyData = [];
-  localStorage.removeItem('skincare_history');
-  renderHistory();
+  showConfirmSheet('清空历史记录', '确定要清空所有历史记录吗？此操作不可撤销。', () => {
+    historyData = [];
+    localStorage.removeItem('skincare_history');
+    renderHistory();
+    showToast('已清空历史记录', 'success');
+  });
+}
+
+// ========== 快速体验：示例成分 ==========
+const DEMO_INGREDIENTS = '水、甘油、丁二醇、乙醇、香精、苯氧乙醇、卡波姆、三乙醇胺、水杨酸、生育酚乙酸酯、EDTA二钠、透明质酸钠';
+
+function loadDemo() {
+  const input = document.getElementById('ingredient-input');
+  input.value = DEMO_INGREDIENTS;
+  input.focus();
+  showToast('已填入示例成分，点击分析查看报告', 'success');
+  // 高亮滚动到输入区
+  input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  input.animate([
+    { boxShadow: '0 0 0 0 rgba(59,130,246,0.4)' },
+    { boxShadow: '0 0 0 8px rgba(59,130,246,0)' }
+  ], { duration: 800 });
+}
+
+// ========== 分享报告 ==========
+function shareReport() {
+  if (!currentResult) return;
+  const { score, comment, productName, riskCount } = currentResult;
+  const total = Object.values(riskCount).reduce((a, b) => a + b, 0);
+  const risky = (riskCount.medium || 0) + (riskCount.high || 0) + (riskCount.banned || 0);
+  const text = `【安肌成分检测报告】\n产品：${productName}\n安全评分：${score}分 · ${comment.text}\n成分总数：${total}｜风险成分：${risky}\n\n来安肌测测你的护肤品是否安全 👉 ${location.origin}`;
+
+  if (navigator.share) {
+    navigator.share({
+      title: '安肌成分检测报告',
+      text: text,
+    }).catch(() => {});
+  } else {
+    navigator.clipboard.writeText(text).then(() => {
+      showToast('报告内容已复制到剪贴板', 'success');
+    }).catch(() => {
+      showToast('复制失败，请手动截图分享', 'warn');
+    });
+  }
+}
+
+// ========== 新手引导 ==========
+const ONBOARDING_KEY = 'skincare_onboarding_v4';
+const ONBOARDING_STEPS = [
+  {
+    icon: '🌿',
+    title: '欢迎来到安肌',
+    desc: '安肌是你的敏感肌成分检测助手。拍照或粘贴成分表，就能快速生成安全分析报告。'
+  },
+  {
+    icon: '📷',
+    title: '拍照识别成分',
+    desc: '上传产品成分表照片，框选成分区域，百度 OCR 会自动识别并提取成分名称。'
+  },
+  {
+    icon: '👤',
+    title: '建立肤质档案',
+    desc: '在「档案」页选择你的肤质和过敏成分，分析结果会更贴合你的实际情况。'
+  },
+  {
+    icon: '📊',
+    title: '查看风险报告',
+    desc: '获得安全评分、风险统计、成分冲突提醒，还能保存历史记录方便对比。'
+  }
+];
+
+function showOnboarding() {
+  if (localStorage.getItem(ONBOARDING_KEY)) return;
+  let step = 0;
+  const overlay = document.createElement('div');
+  overlay.className = 'onboarding-overlay';
+  overlay.innerHTML = `
+    <div class="onboarding-card">
+      <div class="onboarding-illustration">${ONBOARDING_STEPS[0].icon}</div>
+      <h3>${ONBOARDING_STEPS[0].title}</h3>
+      <p>${ONBOARDING_STEPS[0].desc}</p>
+      <div class="onboarding-steps">
+        ${ONBOARDING_STEPS.map((_, i) => `<div class="onboarding-dot ${i === 0 ? 'active' : ''}"></div>`).join('')}
+      </div>
+      <button class="btn btn-primary" id="onboarding-next">下一步</button>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  const update = () => {
+    const s = ONBOARDING_STEPS[step];
+    overlay.querySelector('.onboarding-illustration').textContent = s.icon;
+    overlay.querySelector('h3').textContent = s.title;
+    overlay.querySelector('p').textContent = s.desc;
+    overlay.querySelectorAll('.onboarding-dot').forEach((d, i) => d.classList.toggle('active', i === step));
+    const btn = overlay.querySelector('#onboarding-next');
+    btn.textContent = step === ONBOARDING_STEPS.length - 1 ? '开始使用' : '下一步';
+  };
+
+  overlay.querySelector('#onboarding-next').addEventListener('click', () => {
+    step++;
+    if (step >= ONBOARDING_STEPS.length) {
+      localStorage.setItem(ONBOARDING_KEY, '1');
+      overlay.style.opacity = '0';
+      setTimeout(() => overlay.remove(), 300);
+    } else {
+      update();
+    }
+  });
+
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) {
+      localStorage.setItem(ONBOARDING_KEY, '1');
+      overlay.style.opacity = '0';
+      setTimeout(() => overlay.remove(), 300);
+    }
+  });
+}
+
+// ========== 全局交互增强 ==========
+
+// 每日小贴士
+const DAILY_TIPS = [
+  { icon: '💡', title: '每日小贴士', text: '敏感肌建议优先选择无香精、无酒精的护肤品' },
+  { icon: '🌿', title: '成分小知识', text: '神经酰胺和角鲨烷是修护屏障的经典组合' },
+  { icon: '⚠️', title: '避雷提醒', text: '敏感肌看到「变性酒精」「香精」要格外谨慎' },
+  { icon: '🔆', title: '护肤建议', text: '早 C 晚 A 虽火，但敏感肌请先建立耐受' },
+  { icon: '🧴', title: '洁面选择', text: '氨基酸或 APG 洁面比皂基更适合敏感肌' },
+];
+let currentTip = 0;
+let tipTimer = null;
+
+function showTip(index) {
+  const tip = DAILY_TIPS[index];
+  const textEl = document.getElementById('tip-text');
+  if (!textEl) return;
+  textEl.style.opacity = '0';
+  setTimeout(() => {
+    textEl.textContent = tip.text;
+    textEl.style.opacity = '1';
+  }, 200);
+
+  document.querySelectorAll('#tip-dots .tip-dot').forEach((d, i) => {
+    d.classList.toggle('active', i === index);
+  });
+}
+
+function nextTip() {
+  currentTip = (currentTip + 1) % DAILY_TIPS.length;
+  showTip(currentTip);
+  resetTipTimer();
+}
+
+function resetTipTimer() {
+  if (tipTimer) clearInterval(tipTimer);
+  tipTimer = setInterval(() => {
+    currentTip = (currentTip + 1) % DAILY_TIPS.length;
+    showTip(currentTip);
+  }, 5000);
+}
+
+// 滚动进度条 + 返回顶部
+function initScrollEffects() {
+  const progress = document.getElementById('scroll-progress');
+  const backToTop = document.getElementById('back-to-top');
+  if (!progress || !backToTop) return;
+
+  let raf = null;
+  window.addEventListener('scroll', () => {
+    if (raf) return;
+    raf = requestAnimationFrame(() => {
+      const scrollTop = window.scrollY || document.documentElement.scrollTop;
+      const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+      const percent = docHeight > 0 ? (scrollTop / docHeight) * 100 : 0;
+      progress.style.width = percent + '%';
+      backToTop.classList.toggle('show', scrollTop > 300);
+      raf = null;
+    });
+  }, { passive: true });
+}
+
+function scrollToTop() {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function scrollToSection(id) {
+  const el = document.getElementById(id);
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// 成分风险筛选
+function filterIngredients(level) {
+  document.querySelectorAll('#ingredient-filter .filter-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.filter === level);
+  });
+
+  const items = document.querySelectorAll('#ingredient-list .ingredient-item');
+  items.forEach(item => {
+    const itemLevel = item.dataset.level;
+    if (level === 'all' || itemLevel === level) {
+      item.classList.remove('hidden-item');
+      item.style.animation = 'none';
+      item.offsetHeight; // trigger reflow
+      item.style.animation = 'pageIn 0.35s ease';
+    } else {
+      item.classList.add('hidden-item');
+    }
+  });
+}
+
+// Confetti 撒花
+function fireConfetti(count = 30) {
+  const colors = ['#C4A77D', '#A67B5B', '#8B9A7C', '#D4A373', '#C76B6B', '#F5E6D3'];
+  for (let i = 0; i < count; i++) {
+    const confetti = document.createElement('div');
+    confetti.className = 'confetti';
+    confetti.style.left = Math.random() * 100 + 'vw';
+    confetti.style.background = colors[Math.floor(Math.random() * colors.length)];
+    confetti.style.borderRadius = Math.random() > 0.5 ? '50%' : '0';
+    confetti.style.width = (6 + Math.random() * 8) + 'px';
+    confetti.style.height = (6 + Math.random() * 8) + 'px';
+    confetti.style.animationDuration = (1.5 + Math.random() * 1.5) + 's';
+    confetti.style.transform = `rotate(${Math.random() * 360}deg)`;
+    document.body.appendChild(confetti);
+    setTimeout(() => confetti.remove(), 3500);
+  }
+}
+
+function showCelebrateBadge(text) {
+  const badge = document.createElement('div');
+  badge.className = 'celebrate-badge';
+  badge.textContent = text;
+  document.body.appendChild(badge);
+  setTimeout(() => {
+    badge.style.opacity = '0';
+    badge.style.transform = 'translate(-50%, -50%) scale(0.8)';
+    setTimeout(() => badge.remove(), 400);
+  }, 1800);
+}
+
+// 手势滑动切换页面
+function initSwipe() {
+  let startX = 0;
+  let startY = 0;
+  let startTime = 0;
+
+  document.addEventListener('touchstart', (e) => {
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    startTime = Date.now();
+  }, { passive: true });
+
+  document.addEventListener('touchend', (e) => {
+    const endX = e.changedTouches[0].clientX;
+    const endY = e.changedTouches[0].clientY;
+    const dx = endX - startX;
+    const dy = endY - startY;
+    const dt = Date.now() - startTime;
+
+    if (dt > 300 || Math.abs(dx) < 60 || Math.abs(dy) > Math.abs(dx) * 1.2) return;
+
+    const pages = ['analyze', 'profile', 'history'];
+    const current = document.querySelector('.page.active');
+    if (!current) return;
+    const currentId = current.id.replace('page-', '');
+    const idx = pages.indexOf(currentId);
+    if (idx === -1) return;
+
+    if (dx < 0 && idx < pages.length - 1) {
+      goPage(pages[idx + 1]);
+    } else if (dx > 0 && idx > 0) {
+      goPage(pages[idx - 1]);
+    }
+  }, { passive: true });
 }
 
 // ========== 初始化 ==========
 document.addEventListener('DOMContentLoaded', () => {
   renderProfile();
+  showOnboarding();
+  initScrollEffects();
+  resetTipTimer();
+  initSwipe();
 });

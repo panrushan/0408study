@@ -4,50 +4,122 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>安肌成分检测 - 敏感肌护肤助手</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700;900&family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
   <!-- 百度OCR通过Node.js代理调用，无需前端OCR库 -->
 </head>
 <body>
 
+  <!-- 顶部滚动进度条 -->
+  <div class="scroll-progress" id="scroll-progress"></div>
+
+  <!-- 返回顶部 -->
+  <button class="back-to-top" id="back-to-top" onclick="scrollToTop()" aria-label="返回顶部">↑</button>
+
+  <!-- Aurora 视差背景层 -->
+  <div class="aurora-bg" aria-hidden="true">
+    <div class="aurora-blob b1"></div>
+    <div class="aurora-blob b2"></div>
+    <div class="aurora-blob b3"></div>
+    <div class="aurora-blob b4"></div>
+  </div>
+
   <!-- ==================== 分析页（首页） ==================== -->
   <div class="page active" id="page-analyze">
-    <div class="header">
+    <!-- 品牌 Hero -->
+    <div class="hero">
+      <div class="hero-badge">🆕 百度 OCR 智能识别 v4</div>
       <div class="logo-icon">🌿</div>
       <h1>安肌成分检测</h1>
-      <p>守护敏感肌，科学避雷</p>
-      <div style="display:inline-block; background:#e8f5e9; color:#43a047; padding:4px 12px; border-radius:20px; font-size:12px; margin-top:8px; font-weight:600;">
-        🆕 百度OCR版 v3
+      <p>拍照识别 · 肤质档案 · 风险预警 · 让敏感肌护肤更安心</p>
+    </div>
+
+    <!-- 每日小贴士 -->
+    <div class="tip-card" id="daily-tip" onclick="nextTip()">
+      <div class="tip-icon">💡</div>
+      <div class="tip-content">
+        <div class="tip-title">每日小贴士</div>
+        <div class="tip-text" id="tip-text">敏感肌建议优先选择无香精、无酒精的护肤品</div>
+      </div>
+      <div class="tip-dots" id="tip-dots">
+        <div class="tip-dot active"></div>
+        <div class="tip-dot"></div>
+        <div class="tip-dot"></div>
       </div>
     </div>
 
-    <div class="card">
-      <div class="card-title">📝 粘贴成分表</div>
+    <!-- 功能亮点 -->
+    <div class="feature-grid">
+      <div class="feature-item" onclick="scrollToSection('input-section')">
+        <div class="feature-icon">📷</div>
+        <div class="feature-title">拍照识别</div>
+        <div class="feature-desc">框选成分表<br>一键OCR识别</div>
+      </div>
+      <div class="feature-item" onclick="goPage('profile')">
+        <div class="feature-icon">🧴</div>
+        <div class="feature-title">肤质档案</div>
+        <div class="feature-desc">敏感肌/痘肌<br>个性化评分</div>
+      </div>
+      <div class="feature-item" onclick="loadDemo()">
+        <div class="feature-icon">⚡</div>
+        <div class="feature-title">快速体验</div>
+        <div class="feature-desc">填入示例<br>立即查看报告</div>
+      </div>
+    </div>
+
+    <!-- 使用步骤 -->
+    <div class="card" style="padding-bottom:18px;">
+      <div class="card-title"><span class="icon">🚀</span>简单 3 步开始</div>
+      <div class="steps">
+        <div class="step active">
+          <div class="step-num">1</div>
+          <div class="step-title">上传/粘贴</div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-title">智能分析</div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-title">查看报告</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 文本输入 -->
+    <div class="card" id="input-section">
+      <div class="card-title"><span class="icon">📝</span>粘贴成分表</div>
       <textarea class="textarea" id="ingredient-input" placeholder="请将化妆品成分表粘贴到这里...
 
 示例格式：
 水、甘油、丁二醇、乙醇、香精、苯氧乙醇、透明质酸"></textarea>
-      <button class="btn btn-primary" style="margin-top:14px" onclick="analyzeText()">
-        🔍 开始分析成分
+      <button class="btn btn-primary" id="analyze-btn" style="margin-top:14px" onclick="analyzeText()">
+        <span>🔍</span> 开始分析成分
       </button>
     </div>
 
-    <div style="text-align:center; color:var(--text-secondary); font-size:13px; margin:10px 0;">— 或 —</div>
+    <div style="text-align:center; color:var(--text-secondary); font-size:13px; margin:10px 0; font-weight:500;">— 或 —</div>
 
+    <!-- 图片上传 -->
     <div class="card">
-      <div class="card-title">📷 拍照/上传成分表</div>
+      <div class="card-title"><span class="icon">📷</span>拍照/上传成分表</div>
 
       <!-- 上传区 -->
       <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()">
-        <div class="icon">📸</div>
-        <p>点击上传图片，自动识别成分</p>
-        <p style="font-size:12px; margin-top:6px; opacity:0.6">支持 JPG、PNG 格式</p>
+        <div class="upload-inner">
+          <div class="icon">📸</div>
+          <p>点击上传图片，自动识别成分</p>
+          <p class="upload-tip">支持 JPG、PNG 格式，建议对准成分表</p>
+        </div>
         <input type="file" id="file-input" accept="image/*" onchange="handleImageUpload(event)">
       </div>
 
       <!-- 裁剪区域 -->
       <div id="crop-container" class="crop-container hidden">
         <p style="font-size:13px; color:var(--text-secondary); margin-bottom:10px;">
-          👆 拖动方框选中<strong>成分表</strong>区域，识别会更精准
+          <span style="font-size:15px;">👆</span> 拖动方框选中<strong>成分表</strong>区域，识别会更精准
         </p>
         <div class="crop-wrapper" id="crop-wrapper">
           <canvas id="crop-canvas" class="crop-canvas"></canvas>
@@ -68,10 +140,21 @@
 
       <!-- OCR加载状态 -->
       <div id="ocr-loading" class="loading hidden">
-        <div class="spinner"></div>
-        <p id="ocr-status">正在下载识别引擎...</p>
-        <p style="font-size:12px; opacity:0.6; margin-top:6px;">首次使用需要下载约10MB语言包，请耐心等待</p>
+        <div class="scan-loader">
+          <div class="scan-line"></div>
+        </div>
+        <p id="ocr-status">正在上传图片并识别...</p>
+        <div class="progress-bar"><div class="progress-bar-fill"></div></div>
       </div>
+    </div>
+
+    <!-- 快速试用 -->
+    <div class="card" style="background: linear-gradient(135deg, #ecfdf5, #f0f9ff); border-color: rgba(16,185,129,0.18);">
+      <div class="card-title"><span class="icon">✨</span>快速体验</div>
+      <p style="font-size:13px; color:var(--text-secondary); margin-bottom:12px;">不知道从哪里开始？试试这个示例成分表</p>
+      <button class="btn btn-outline" onclick="loadDemo()">
+        <span>🧪</span> 填入示例成分
+      </button>
     </div>
   </div>
 
@@ -84,7 +167,7 @@
     </div>
 
     <!-- 评分区 -->
-    <div class="card" style="text-align:center;">
+    <div class="card score-card-tilt tilt-card" data-tilt="4" style="text-align:center;">
       <div class="score-circle" id="score-circle">
         <span class="score-num" id="score-num">--</span>
         <span class="score-label" id="score-label">安全评分</span>
@@ -138,12 +221,29 @@
     <!-- 成分详情列表 -->
     <div class="card">
       <div class="card-title">🔬 成分详细分析</div>
+      <p style="font-size:12px; color:var(--text-secondary); margin-bottom:10px;">点击成分名查看百科，点击下方筛选快速定位风险成分</p>
+      <div class="filter-bar" id="ingredient-filter">
+        <button class="filter-btn active" data-filter="all" onclick="filterIngredients('all')">全部</button>
+        <button class="filter-btn" data-filter="safe" onclick="filterIngredients('safe')">🟢 安全</button>
+        <button class="filter-btn" data-filter="warning" onclick="filterIngredients('warning')">🟠 中风险</button>
+        <button class="filter-btn" data-filter="danger" onclick="filterIngredients('danger')">🔴 高风险</button>
+        <button class="filter-btn" data-filter="banned" onclick="filterIngredients('banned')">⛔ 禁用</button>
+      </div>
       <div class="ingredient-list" id="ingredient-list"></div>
     </div>
 
-    <!-- 保存按钮 -->
-    <button class="btn btn-primary" onclick="saveToHistory()">💾 保存到历史记录</button>
-    <button class="btn btn-outline" style="margin-top:10px;" onclick="goPage('analyze')">← 重新分析</button>
+    <!-- 操作按钮 -->
+    <div class="action-group">
+      <button class="btn btn-outline" onclick="goPage('analyze')">
+        <span>🔄</span> 重新分析
+      </button>
+      <button class="btn btn-primary" onclick="shareReport()">
+        <span>📤</span> 分享报告
+      </button>
+    </div>
+    <button class="btn btn-primary" style="margin-top:10px; background: linear-gradient(135deg, #06B6D4, #3B82F6);" onclick="saveToHistory()">
+      <span>💾</span> 保存到历史记录
+    </button>
   </div>
 
   <!-- ==================== 成分百科弹窗 ==================== -->
@@ -227,7 +327,10 @@
     <div class="empty-state" id="history-empty">
       <div class="empty-icon">📭</div>
       <p>还没有检测记录</p>
-      <p style="font-size:13px; margin-top:6px;">去首页分析第一款产品吧~</p>
+      <p class="empty-tip">去首页分析第一款产品，报告会自动保存到这里</p>
+      <button class="btn btn-primary" style="margin-top:18px; max-width:220px;" onclick="goPage('analyze')">
+        <span>🔍</span> 去检测
+      </button>
     </div>
 
     <button class="btn btn-outline hidden" id="clear-history" style="margin-top:10px;" onclick="clearHistory()">
@@ -253,6 +356,7 @@
 
   <!-- 数据与逻辑（改名防止缓存） -->
   <script src="data/ingredients-v3.js"></script>
+  <script src="js/tilt.js"></script>
   <script src="js/app-v3.js"></script>
 </body>
 </html>
